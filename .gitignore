@@ -234,3 +234,7 @@ index_maps/
 *.lock
 tests/vis_logits
 .cursorrules
+
+# Evaluation outputs
+eval_results.csv
+*_results.csv

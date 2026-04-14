@@ -1,1 +1,2 @@
 from .libero_dataset import LiberoDataset
+from .egocentric_dataset import EgocentricDataset

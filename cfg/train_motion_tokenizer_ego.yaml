@@ -1,0 +1,94 @@
+# Motion tokenizer config for single-view egocentric factory video.
+# Adapted from cfg/train_motion_tokenizer.yaml with:
+#   - single egocentric camera view
+#   - keys_to_load: [tracks] only (cond_on_img=false, skip frame I/O for speed)
+#   - 35 epochs (sufficient for go/no-go signal within 12h GPU budget)
+#   - egocentric dataset routing via get_datasets()
+
+# Train
+batch_size: 256
+gpu_max_bs: 64
+num_epochs: 35
+lr: 1e-4
+lr_schedule: null
+clip_grad: 0.0
+weight_decay: 0.0
+adam_betas:
+  - 0.9
+  - 0.95
+amp: true
+compile: false
+root_dir: null
+train_split: 1.0
+log_interval: 100
+save_interval: 5
+checkpoint: null
+resume: true
+run_name: motion_tokenizer_ego
+
+# Wandb
+use_wandb: false
+wandb_group: null
+wandb_entity: null
+wandb_project: null
+
+# Debug
+quick: false
+profile: false
+
+# Dataset
+# Format: "egocentric_<split>:traj<fraction>"
+#   traj0.8  → first 80% of videos (train)
+#   traj-0.2 → last  20% of videos (val)
+libero_path: null
+train_datasets:
+  - egocentric_gcs_scored:traj0.8
+val_datasets:
+  - egocentric_gcs_scored:traj-0.2
+task_names: null
+
+track_method: uniform_400_reinit_16
+cond_cameraviews:
+  - egocentric
+keys_to_load:
+  - tracks          # skip images — cond_on_img is false, no point loading frames
+img_shape: [128, 128]
+true_horizon: 16
+track_pred_horizon: 16
+interp_method: linear
+num_tracks: 400
+num_workers: 4
+
+# Model
+type: transformer
+num_heads: 8
+num_layers: 2
+attn_pdrop: 0.1
+point_dim: 2
+hidden_dim: 768
+codebook_size: 2048
+causal_encoder: true
+decoder_mlp_hidden_dim: 256
+
+cond_on_img: false
+
+vision_encoder:
+  model_name: resnet18
+  frozen: true
+  lr_multiplier: 1.0
+  get_patches: true
+  get_cls_and_patches: false
+  patch_pooling: null
+
+loss:
+  loss_fn: relative_ce
+  loss_weights:
+    egocentric: 1.0     # single-view weight
+    all: 1.0
+  cls_img_size: ${img_shape}
+  rel_cls_img_size: [15, 15]
+  num_angle_bins: null
+  num_mag_bins: null
+  max_polar_mag: null
+
+per_view: false

@@ -35,7 +35,10 @@ from amplify.utils.train import (
     save_checkpoint,
 )
 from amplify.utils.vis_utils import vis_pred
-from eval_libero import eval
+try:
+    from eval_libero import eval
+except ImportError:
+    eval = None  # eval_libero requires gym/LIBERO; unavailable in egocentric-only setup
 
 torch.multiprocessing.set_start_method('spawn', force=True)
 opt_einsum.strategy = 'auto-hq' # seems to speed up training by 10% or so
@@ -304,7 +307,10 @@ def main(cfg):
             model = torch.compile(model)
 
     # Dataloaders
-    keys_to_load = motion_tokenizer_cfg.keys_to_load # tracks, images
+    keys_to_load = list(motion_tokenizer_cfg.keys_to_load)  # tracks (+ images if MT config includes them)
+    # FD always needs images for the vision encoder, even if MT was trained without them
+    if 'images' not in keys_to_load:
+        keys_to_load.append('images')
     if cfg.forward_dynamics.text_encoder.use_preprocessed_embs:
         keys_to_load.append('text_emb')
     else:

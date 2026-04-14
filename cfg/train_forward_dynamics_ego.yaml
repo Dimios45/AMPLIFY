@@ -1,0 +1,128 @@
+# Forward dynamics config for single-view egocentric factory video.
+# Adapted from cfg/train_forward_dynamics.yaml with:
+#   - single egocentric camera view
+#   - constant task text ("factory worker performing precision manipulation task")
+#   - 35 epochs within 12h GPU budget
+#   - no LIBERO eval suites
+
+# Train
+batch_size: 256
+gpu_max_bs: 64
+generate_video: false
+num_epochs: 35
+log_interval: 100
+num_workers: 4
+save_interval: 5
+eval_interval: 0
+use_wandb: false
+wandb_group: null
+wandb_entity: null
+wandb_project: null
+run_name: forward_dynamics_ego
+checkpoint: null
+resume: true
+compile: false
+root_dir: null
+
+# Debug
+quick: false
+profile: false
+
+# Datasets
+# NOTE: motion tokenizer checkpoint must be set at launch via CLI override:
+#   model.forward_dynamics.motion_tokenizer.checkpoint=checkpoints/motion_tokenizer_ego/latest.pt
+train_datasets:
+  - egocentric_gcs_scored:traj0.8
+val_datasets:
+  - egocentric_gcs_scored:traj-0.2
+
+task_names: null
+
+track_method: uniform_400_reinit_16
+cond_cameraviews:
+  - egocentric
+keys_to_load:
+  - images
+  - tracks
+img_shape: [128, 128]
+true_horizon: 16
+track_pred_horizon: 16
+interp_method: linear
+num_tracks: 400
+
+augmentations:
+  color_jitter: false
+  color_jitter_strength: 0.3
+  gaussian_blur: false
+  gaussian_blur_kernel_size: [3, 5, 7]
+  gaussian_blur_sigma_min: 0.1
+  gaussian_blur_sigma_max: 2.0
+  gaussian_blur_p: 0.5
+
+eval:
+  suites: null
+  n_envs: 1
+  max_steps: 500
+  temporal_agg: true
+  action_dim: 7
+  vis_traj: true
+  log_detailed_stats: false
+  img_size: 128
+
+forward_dynamics:
+  vision_encoder:
+    model_name: resnet18
+    frozen: true
+    lr_multiplier: 1.0
+    get_patches: true
+    get_cls_and_patches: false
+    patch_pooling: null
+
+  text_encoder:
+    size: small
+    frozen: true
+    return_all_tokens: false
+    use_preprocessed_embs: false   # compute embeddings at runtime (no precomputed cache)
+
+  motion_tokenizer:
+    frozen: true
+    checkpoint: null               # override at CLI: model.forward_dynamics.motion_tokenizer.checkpoint=...
+    use_codes: true
+
+  inverse_dynamics:
+    load: false
+    frozen: true
+    checkpoint: null
+
+  transformer:
+    n_layer: 8
+    n_head: 8
+    dropout: 0.1
+    bias: false
+
+  # General
+  ar_sampling: argmax
+  modality_emb: false
+  cross_attend_cond: false
+  cond_on_proprio: false
+  proprio_dim: 9
+
+  # Loss — only codebook CE matters for egocentric data (no actions)
+  loss_fn: codebook_ce
+  loss_weights:
+    weighted_ce: 0.05
+    vis: 1.0e-4
+
+  loss_biases:
+    actions: 0.0
+
+# Optimizer
+optim:
+  lr_schedule: null
+  clip_grad: 1.0
+  lr: 1.0e-04
+  weight_decay: 0.0
+  adam_betas:
+    - 0.9
+    - 0.95
+  automatic_mixed_precision: true

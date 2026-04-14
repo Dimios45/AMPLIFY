@@ -13,6 +13,7 @@ from tqdm import tqdm
 
 import wandb
 from amplify.loaders import LiberoDataset
+from amplify.loaders import EgocentricDataset
 
 
 def seed_everything(seed):
@@ -255,6 +256,26 @@ def get_datasets(
         "aug_cfg": aug_cfg,
     }
 
+    def _make_dataset(dataset_name, modality_dict, modality):
+        """Instantiate the right dataset class for *dataset_name*."""
+        if "libero" in str(dataset_name):
+            return LiberoDataset(
+                dataset_names=[dataset_name],
+                demo_subset=modality_dict[modality],
+                libero_path=motion_tokenizer_cfg.libero_path,
+                **common_cfgs,
+            )
+        elif "egocentric" in str(dataset_name):
+            # Convention: "egocentric_<split>" e.g. "egocentric_gcs_scored"
+            split_name = dataset_name.replace("egocentric_", "", 1)
+            return EgocentricDataset(
+                dataset_names=[split_name],
+                video_subset=modality_dict[modality],
+                **common_cfgs,
+            )
+        else:
+            raise NotImplementedError(f"Dataset {dataset_name} is not implemented.")
+
     # Train datasets
     train_dataset_info = parse_dataset_strings(train_datasets)
     print("train_dataset_info: ", train_dataset_info)
@@ -262,16 +283,7 @@ def get_datasets(
     train_datasets = {}
     for dataset_name, modality_dict in train_dataset_info:
         for modality in modality_dict:
-            if "libero" in str(dataset_name):
-                dataset = LiberoDataset(
-                    dataset_names=[dataset_name],
-                    demo_subset=modality_dict[modality],
-                    libero_path=motion_tokenizer_cfg.libero_path,
-                    **common_cfgs,
-                )
-            else:
-                raise NotImplementedError(f"Dataset {dataset_name} is not implemented.")
-
+            dataset = _make_dataset(dataset_name, modality_dict, modality)
             train_datasets.setdefault(modality, []).append(dataset)
 
     for modality in train_datasets.keys():
@@ -285,16 +297,7 @@ def get_datasets(
         val_datasets = {}
         for dataset_name, modality_dict in val_dataset_info:
             for modality in modality_dict:
-                if "libero" in str(dataset_name):
-                    dataset = LiberoDataset(
-                        dataset_names=[dataset_name],
-                        demo_subset=modality_dict[modality],
-                        libero_path=motion_tokenizer_cfg.libero_path,
-                        **common_cfgs,
-                    )
-                else:
-                    raise NotImplementedError(f"Validation dataset {dataset_name} is not implemented.")
-
+                dataset = _make_dataset(dataset_name, modality_dict, modality)
                 val_datasets.setdefault(modality, []).append(dataset)
 
         for modality in val_datasets.keys():
@@ -331,7 +334,8 @@ def get_dataloaders(
                 batch_size=gpu_max_bs,
                 sampler=sampler,
                 num_workers=num_workers,
-                persistent_workers=num_workers > 0,
+                persistent_workers=False,
+                multiprocessing_context='spawn' if num_workers > 0 else None,
             )
 
     if val_dataset_concat_dict is not None:
@@ -339,15 +343,16 @@ def get_dataloaders(
         for key in val_dataset_concat_dict:
             if val_dataset_concat_dict[key] is not None:
                 print(f"{key} dataset size: ", len(val_dataset_concat_dict[key]))
+                _val_epoch_size = val_epoch_size or min(len(val_dataset_concat_dict[key]), 5 * gpu_max_bs)
                 sampler = RandomSampler(
-                    val_dataset_concat_dict[key],num_samples=val_epoch_size
+                    val_dataset_concat_dict[key], num_samples=_val_epoch_size
                 )
                 val_dataloader_dict[key] = DataLoader(
                     val_dataset_concat_dict[key],
                     batch_size=gpu_max_bs,
                     sampler=sampler,
-                    num_workers=int(num_workers > 0),  # set to 0 if num_workers is 0
-                    persistent_workers=num_workers > 0,
+                    num_workers=0,
+                    persistent_workers=False,
                 )
     else:
         val_dataloader_dict = None
